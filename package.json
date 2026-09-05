@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
-    "ytdl-core": "^4.11.2"
+    "ytdlp-nodejs": "^3.4.5"
   }
 }
