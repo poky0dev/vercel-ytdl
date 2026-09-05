@@ -1,29 +1,71 @@
-const { YtDlp } = require('ytdlp-nodejs');
+const { YtDlp, helpers } = require('ytdlp-nodejs');
 
-const ytdlp = new YtDlp();
+const API_KEY = 'Nyxahcute1';
+
+let ytdlp;
 
 module.exports = async (req, res) => {
-  let videoUrl = req.query.url;
-  const outputFormat = (req.query.format || 'mp4').toLowerCase();
+  // CORS liberado para todos
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
-  if (!videoUrl) {
-    return res.status(400).json({
-      error: 'Missing YouTube video ID or URL'
+  // Preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // Somente GET
+  if (req.method !== 'GET') {
+    return res.status(405).json({
+      error: 'Method not allowed. Use GET.'
     });
   }
 
-  // Aceita ID ou URL
-  if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://')) {
-    videoUrl = `https://www.youtube.com/watch?v=${videoUrl}`;
-  }
+  // API key pela query
+  const key = req.query.key;
 
-  if (!['mp3', 'm4a', 'mp4'].includes(outputFormat)) {
-    return res.status(400).json({
-      error: 'Format must be mp3, m4a or mp4'
+  if (!key || key !== API_KEY) {
+    return res.status(401).json({
+      error: 'Invalid or missing API key'
     });
   }
 
   try {
+    // Inicializa o yt-dlp
+    if (!ytdlp) {
+      const binaryPath = await helpers.downloadYtDlp();
+
+      ytdlp = new YtDlp({
+        binaryPath
+      });
+    }
+
+    let videoUrl = req.query.url;
+    const outputFormat =
+      (req.query.format || 'mp4').toLowerCase();
+
+    if (!videoUrl) {
+      return res.status(400).json({
+        error: 'Missing YouTube video ID or URL'
+      });
+    }
+
+    // Aceita ID ou URL
+    if (
+      !videoUrl.startsWith('http://') &&
+      !videoUrl.startsWith('https://')
+    ) {
+      videoUrl =
+        `https://www.youtube.com/watch?v=${videoUrl}`;
+    }
+
+    // Formatos permitidos
+    if (!['mp3', 'm4a', 'mp4'].includes(outputFormat)) {
+      return res.status(400).json({
+        error: 'Format must be mp3, m4a or mp4'
+      });
+    }
+
     let stream;
 
     if (outputFormat === 'mp4') {
@@ -56,12 +98,15 @@ module.exports = async (req, res) => {
       res.setHeader('Content-Type', 'audio/mpeg');
     }
 
+    // Reproduzir no navegador em vez de forçar download
     res.setHeader(
       'Content-Disposition',
       `inline; filename="video.${outputFormat}"`
     );
 
-    stream.on('error', (error) => {
+    const outputStream = stream.getStream();
+
+    outputStream.on('error', (error) => {
       console.error('yt-dlp stream error:', error);
 
       if (!res.headersSent) {
@@ -74,7 +119,7 @@ module.exports = async (req, res) => {
       }
     });
 
-    stream.getStream().pipe(res);
+    outputStream.pipe(res);
 
   } catch (error) {
     console.error('YouTube error:', error);
