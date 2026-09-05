@@ -1,6 +1,6 @@
-const { YTDLP } = require('ytdlp-nodejs');
+const { YtDlp } = require('ytdlp-nodejs');
 
-const ytdlp = new YTDLP();
+const ytdlp = new YtDlp();
 
 module.exports = async (req, res) => {
   let videoUrl = req.query.url;
@@ -27,27 +27,31 @@ module.exports = async (req, res) => {
     let stream;
 
     if (outputFormat === 'mp4') {
-      stream = ytdlp.stream(videoUrl, {
-        format: 'best[ext=mp4]/best'
-      });
+      stream = ytdlp
+        .stream(videoUrl)
+        .filter('audioandvideo')
+        .quality('highest')
+        .type('mp4');
 
       res.setHeader('Content-Type', 'video/mp4');
     }
 
     if (outputFormat === 'm4a') {
-      stream = ytdlp.stream(videoUrl, {
-        format: 'bestaudio[ext=m4a]/bestaudio'
-      });
+      stream = ytdlp
+        .stream(videoUrl)
+        .filter('audioonly')
+        .quality(5)
+        .type('m4a');
 
       res.setHeader('Content-Type', 'audio/mp4');
     }
 
     if (outputFormat === 'mp3') {
-      stream = ytdlp.stream(videoUrl, {
-        extractAudio: true,
-        audioFormat: 'mp3',
-        audioQuality: '0'
-      });
+      stream = ytdlp
+        .stream(videoUrl)
+        .filter('audioonly')
+        .quality(5)
+        .type('mp3');
 
       res.setHeader('Content-Type', 'audio/mpeg');
     }
@@ -70,7 +74,7 @@ module.exports = async (req, res) => {
       }
     });
 
-    stream.pipe(res);
+    stream.getStream().pipe(res);
 
   } catch (error) {
     console.error('YouTube error:', error);
