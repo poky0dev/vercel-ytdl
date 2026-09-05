@@ -1,4 +1,6 @@
-const ytdl = require('ytdl-core');
+const { YTDLP } = require('ytdlp-nodejs');
+
+const ytdlp = new YTDLP();
 
 module.exports = async (req, res) => {
   let videoUrl = req.query.url;
@@ -11,14 +13,8 @@ module.exports = async (req, res) => {
   }
 
   // Aceita ID ou URL
-  if (!ytdl.validateURL(videoUrl)) {
+  if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://')) {
     videoUrl = `https://www.youtube.com/watch?v=${videoUrl}`;
-  }
-
-  if (!ytdl.validateURL(videoUrl)) {
-    return res.status(400).json({
-      error: 'Invalid YouTube URL or ID'
-    });
   }
 
   if (!['mp3', 'm4a', 'mp4'].includes(outputFormat)) {
@@ -28,57 +24,53 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const info = await ytdl.getInfo(videoUrl);
+    let stream;
 
-    // MP4
     if (outputFormat === 'mp4') {
-      const format = ytdl.chooseFormat(info.formats, {
-        quality: '18',
-        container: 'mp4'
+      stream = ytdlp.stream(videoUrl, {
+        format: 'best[ext=mp4]/best'
       });
-
-      if (!format) {
-        return res.status(404).json({
-          error: 'MP4 format not found'
-        });
-      }
 
       res.setHeader('Content-Type', 'video/mp4');
-      res.setHeader(
-        'Content-Disposition',
-        'inline; filename="video.mp4"'
-      );
-
-      return ytdl(videoUrl, { format }).pipe(res);
     }
 
-    // M4A
     if (outputFormat === 'm4a') {
-      const format = ytdl.chooseFormat(info.formats, {
-        quality: 'highestaudio',
-        filter: 'audioonly',
-        container: 'm4a'
+      stream = ytdlp.stream(videoUrl, {
+        format: 'bestaudio[ext=m4a]/bestaudio'
       });
 
-      if (!format) {
-        return res.status(404).json({
-          error: 'M4A format not found'
-        });
-      }
-
       res.setHeader('Content-Type', 'audio/mp4');
-      res.setHeader(
-        'Content-Disposition',
-        'inline; filename="nyxah-audio-api.m4a"'
-      );
-
-      return ytdl(videoUrl, { format }).pipe(res);
     }
 
-    // MP3 requires FFmpeg
-    return res.status(501).json({
-      error: 'MP3 conversion requires FFmpeg'
+    if (outputFormat === 'mp3') {
+      stream = ytdlp.stream(videoUrl, {
+        extractAudio: true,
+        audioFormat: 'mp3',
+        audioQuality: '0'
+      });
+
+      res.setHeader('Content-Type', 'audio/mpeg');
+    }
+
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="video.${outputFormat}"`
+    );
+
+    stream.on('error', (error) => {
+      console.error('yt-dlp stream error:', error);
+
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Failed to process video',
+          details: error.message
+        });
+      } else {
+        res.end();
+      }
     });
+
+    stream.pipe(res);
 
   } catch (error) {
     console.error('YouTube error:', error);
